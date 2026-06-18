@@ -1,0 +1,7 @@
+ttc_critical: 1.5
+ttc_high: 3.0
+ttc_medium: 5.0
+min_dist_critical: 1.0
+min_dist_high: 3.0
+min_dist_medium: 8.0
+collision_threshold_m: 2.0

@@ -1,0 +1,8 @@
+defaults:
+  - data: nuscenes
+  - forecaster: constant_velocity
+  - risk: default
+  - _self_
+
+scene_token: ???
+output_dir: outputs
