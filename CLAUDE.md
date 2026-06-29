@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Goal
 
-Self-Driving Scene Risk Predictor — a production-quality autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the nuScenes dataset.
+Self-Driving Scene Risk Predictor — a clean, resume-quality autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the nuScenes dataset.
 
 This is NOT an object detection project. nuScenes bounding-box annotations serve as detections; the focus is the reasoning stack above perception: trajectory extraction → forecasting → risk assessment → visualization.
 
@@ -31,7 +31,10 @@ nuScenes Annotations
   [ pipeline ]      orchestrate all layers per scene
 ```
 
-**Import rule**: `data ← forecasting ← risk ← visualization ← pipeline`
+**Import rules**:
+
+- **Allowed**: each layer may import only from layers upstream of it. `forecasting` may import `data`; `risk` may import `data` and `forecasting`; `visualization` may import any of `data`, `forecasting`, `risk`; `pipeline` may import all of them.
+- **Forbidden**: any import from a downstream layer (e.g. `data` importing `forecasting`, or `risk` importing `visualization`). No cyclic imports.
 
 All inter-layer contracts are typed dataclasses in `src/scene_risk/data/schemas.py`. Never pass raw dicts between modules.
 
@@ -39,7 +42,7 @@ All inter-layer contracts are typed dataclasses in `src/scene_risk/data/schemas.
 
 - **Dataset**: nuScenes v1.0-mini (10 scenes, 2 Hz annotation rate)
 - **Tracking**: `instance_token` is a persistent agent identity — no tracker needed
-- **Coordinate frame**: global (world) frame for all positions and velocities
+- **Coordinate frame**: global (world) frame for all positions and velocities. Risk is always computed in global coordinates; only `visualization` may transform to ego-centered BEV coordinates for rendering.
 - **Ego vehicle**: extracted from `ego_pose` records via `LIDAR_TOP` sample data; not present in `sample["anns"]`
 - **Velocity**: obtained via `nusc.box_velocity(ann_token)`; falls back to `[0, 0]` at scene boundaries
 
@@ -58,6 +61,7 @@ All inter-layer contracts are typed dataclasses in `src/scene_risk/data/schemas.
 3. Compute per-agent TTC and minimum-distance scores relative to ego.
 4. Produce a `SceneRisk` with per-agent breakdown and a scene-level label.
 5. Render BEV PNG frames: oriented agent boxes, trajectory fans, risk color-coding.
+6. Evaluate forecasting accuracy with ADE/FDE-style displacement metrics against observed future positions.
 
 ## CLAUDE.md Hierarchy
 
