@@ -40,7 +40,9 @@ class BEVRenderer:
         for state in current_states:
             agent_risk = risk_by_id.get(state.agent_id)
             color = _RISK_COLOR[agent_risk.risk_level] if agent_risk else _UNKNOWN_COLOR
-            self._draw_agent(canvas, state, ego_state.position, color, pred_by_id.get(state.agent_id))
+            self._draw_agent(
+                canvas, state, ego_state.position, color, pred_by_id.get(state.agent_id)
+            )
 
         self._draw_ego(canvas, ego_state)
         self._draw_hud(canvas, scene_risk, sample_token)
@@ -72,8 +74,8 @@ class BEVRenderer:
         w_px = max(4, int(state.size[0] * self._scale))
         l_px = max(4, int(state.size[1] * self._scale))
         box = cv2.boxPoints(((cx, cy), (l_px, w_px), -np.degrees(state.heading)))  # type: ignore[call-overload]
-        cv2.drawContours(canvas, [np.int32(box)], 0, color, -1)
-        cv2.drawContours(canvas, [np.int32(box)], 0, (255, 255, 255), 1)
+        cv2.drawContours(canvas, [box.astype(np.int32)], 0, color, -1)
+        cv2.drawContours(canvas, [box.astype(np.int32)], 0, (255, 255, 255), 1)
 
         if pred is not None:
             prev_pt = (cx, cy)
@@ -88,28 +90,44 @@ class BEVRenderer:
         w_px = max(4, int(ego_state.size[0] * self._scale))
         l_px = max(4, int(ego_state.size[1] * self._scale))
         box = cv2.boxPoints((center, (l_px, w_px), 0.0))  # type: ignore[call-overload]
-        cv2.drawContours(canvas, [np.int32(box)], 0, _EGO_COLOR, -1)
-        cv2.drawContours(canvas, [np.int32(box)], 0, (0, 0, 0), 1)
+        cv2.drawContours(canvas, [box.astype(np.int32)], 0, _EGO_COLOR, -1)
+        cv2.drawContours(canvas, [box.astype(np.int32)], 0, (0, 0, 0), 1)
         cv2.putText(
-            canvas, "EGO", (center[0] - 12, center[1] - l_px // 2 - 4),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.35, _EGO_COLOR, 1,
+            canvas,
+            "EGO",
+            (center[0] - 12, center[1] - l_px // 2 - 4),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.35,
+            _EGO_COLOR,
+            1,
         )
 
-    def _draw_hud(
-        self, canvas: np.ndarray, scene_risk: SceneRisk, sample_token: str
-    ) -> None:
+    def _draw_hud(self, canvas: np.ndarray, scene_risk: SceneRisk, sample_token: str) -> None:
         color = _RISK_COLOR[scene_risk.risk_label]
         cv2.putText(
             canvas,
             f"Risk: {scene_risk.risk_label.value}  score={scene_risk.scene_risk_score:.2f}",
-            (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2,
+            (10, 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            color,
+            2,
         )
         cv2.putText(
             canvas,
             f"agents: {len(scene_risk.agent_risks)}",
-            (10, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1,
+            (10, 52),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (180, 180, 180),
+            1,
         )
         cv2.putText(
-            canvas, sample_token[:12],
-            (10, self._size - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (100, 100, 100), 1,
+            canvas,
+            sample_token[:12],
+            (10, self._size - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.35,
+            (100, 100, 100),
+            1,
         )
