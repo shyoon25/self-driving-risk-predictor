@@ -104,16 +104,35 @@ scene-risk/
 
 ## Setup
 
-**Requirements:** Python 3.11+, nuScenes v1.0-mini dataset ([download](https://www.nuscenes.org/nuscenes#download))
+**Requirements:** Python **3.11 or 3.12** (see note below), the GEOS native library, and the
+nuScenes v1.0-mini dataset.
 
 ```bash
-# 1. Clone and install
+# 1. GEOS — required to build Shapely (a nuscenes-devkit dependency)
+brew install geos                      # macOS; Linux: apt-get install libgeos-dev
+
+# 2. Clone and install into an isolated venv
 git clone https://github.com/shyoon25/scene-risk.git
 cd scene-risk
-pip install -e ".[dev]"
+python3.11 -m venv .venv && source .venv/bin/activate
+GEOS_CONFIG="$(brew --prefix geos)/bin/geos-config" pip install -e ".[dev]"
 
-# 2. Verify unit tests pass (no dataset needed)
+# 3. Verify unit tests pass (no dataset needed)
 pytest tests/unit
+```
+
+> **Python version:** use 3.11 or 3.12. On Python 3.14 the Hydra 1.3 CLI fails at startup
+> (`ValueError: badly formed help string`, from 3.14's stricter `argparse`), and
+> `nuscenes-devkit` pins `numpy<2`, which conflicts with packages requiring numpy 2 — a venv
+> keeps that contained.
+
+**Get the dataset:** download **Full dataset (v1.0) → Mini** (`v1.0-mini.tgz`, ~4 GB) from the
+[nuScenes downloads page](https://www.nuscenes.org/nuscenes#download) — *not* the Panoptic/Lidarseg
+add-ons — then extract it so `dataroot` contains `maps/ samples/ sweeps/ v1.0-mini/`:
+
+```bash
+mkdir -p ~/data/nuscenes
+tar -xf ~/Downloads/v1.0-mini.tgz -C ~/data/nuscenes
 ```
 
 ---
