@@ -12,6 +12,20 @@ def min_distance(ego: Prediction, agent: Prediction) -> float:
     return float(dists.min())
 
 
+def is_closing(ego: Prediction, agent: Prediction, margin_m: float = 0.5) -> bool:
+    """Whether ego and agent are predicted to approach each other.
+
+    Returns True when the minimum predicted separation is at least ``margin_m``
+    smaller than the separation at the start of the horizon — i.e. the paths get
+    meaningfully closer than they already are (an approach or crossing). Returns
+    False for pairs that hold a roughly constant gap, such as an object parked
+    alongside a stationary ego.
+    """
+    T = min(len(ego.waypoints), len(agent.waypoints))
+    dists = np.linalg.norm(ego.waypoints[:T] - agent.waypoints[:T], axis=1)
+    return bool(dists.min() < dists[0] - margin_m)
+
+
 def ttc(
     ego: Prediction,
     agent: Prediction,

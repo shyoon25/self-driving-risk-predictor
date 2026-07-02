@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from scene_risk.data.schemas import AgentRisk, Prediction, RiskLevel, SceneRisk
 from scene_risk.risk.levels import RiskThresholds
-from scene_risk.risk.metrics import min_distance, ttc
+from scene_risk.risk.metrics import is_closing, min_distance, ttc
 
 _LEVEL_ORDER = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL]
 _LEVEL_SCORE = {lvl: i / (len(_LEVEL_ORDER) - 1) for i, lvl in enumerate(_LEVEL_ORDER)}
@@ -24,6 +24,13 @@ class RiskAssessor:
             t = ttc(ego_prediction, pred, self._thresh.collision_threshold_m)
             d = min_distance(ego_prediction, pred)
             level = self._thresh.classify(t, d)
+            # Gate proximity-driven escalation by relative motion: an agent that
+            # holds a constant gap (e.g. parked beside a stationary ego) is not a
+            # threat, however close it sits.
+            if level != RiskLevel.LOW and not is_closing(
+                ego_prediction, pred, self._thresh.closing_margin_m
+            ):
+                level = RiskLevel.LOW
             agent_risks.append(
                 AgentRisk(agent_id=pred.agent_id, ttc=t, min_distance=d, risk_level=level)
             )

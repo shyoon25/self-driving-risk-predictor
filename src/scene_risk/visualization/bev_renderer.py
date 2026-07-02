@@ -5,14 +5,25 @@ import numpy as np
 
 from scene_risk.data.schemas import AgentRisk, AgentState, Prediction, RiskLevel, SceneRisk
 
+# BGR; severity increases in brightness so CRITICAL is the most eye-catching.
 _RISK_COLOR: dict[RiskLevel, tuple[int, int, int]] = {
     RiskLevel.LOW: (0, 200, 0),
     RiskLevel.MEDIUM: (0, 165, 255),
-    RiskLevel.HIGH: (0, 0, 255),
-    RiskLevel.CRITICAL: (0, 0, 180),
+    RiskLevel.HIGH: (0, 90, 255),
+    RiskLevel.CRITICAL: (0, 0, 255),
 }
 _EGO_COLOR: tuple[int, int, int] = (255, 255, 255)
 _UNKNOWN_COLOR: tuple[int, int, int] = (140, 140, 140)
+
+# Agents at these levels are enlarged, ringed, and drawn on top so they stand out.
+_ELEVATED: frozenset[RiskLevel] = frozenset({RiskLevel.HIGH, RiskLevel.CRITICAL})
+_LEVEL_ORDER: dict[RiskLevel, int] = {
+    RiskLevel.LOW: 0,
+    RiskLevel.MEDIUM: 1,
+    RiskLevel.HIGH: 2,
+    RiskLevel.CRITICAL: 3,
+}
+_ELEVATED_MIN_PX = 12  # floor on box size for risky agents (small objects stay visible)
 
 
 class BEVRenderer:
@@ -37,11 +48,17 @@ class BEVRenderer:
         risk_by_id: dict[str, AgentRisk] = {r.agent_id: r for r in scene_risk.agent_risks}
         pred_by_id: dict[str, Prediction] = {p.agent_id: p for p in predictions}
 
-        for state in current_states:
+        def severity(state: AgentState) -> int:
+            r = risk_by_id.get(state.agent_id)
+            return _LEVEL_ORDER[r.risk_level] if r else -1
+
+        # Draw low-risk first so HIGH/CRITICAL agents land on top and are never occluded.
+        for state in sorted(current_states, key=severity):
             agent_risk = risk_by_id.get(state.agent_id)
-            color = _RISK_COLOR[agent_risk.risk_level] if agent_risk else _UNKNOWN_COLOR
+            level = agent_risk.risk_level if agent_risk else None
+            color = _RISK_COLOR[level] if level else _UNKNOWN_COLOR
             self._draw_agent(
-                canvas, state, ego_state.position, color, pred_by_id.get(state.agent_id)
+                canvas, state, ego_state.position, color, pred_by_id.get(state.agent_id), level
             )
 
         self._draw_ego(canvas, ego_state)
@@ -66,16 +83,24 @@ class BEVRenderer:
         ego_pos: np.ndarray,
         color: tuple[int, int, int],
         pred: Prediction | None,
+        level: RiskLevel | None = None,
     ) -> None:
         cx, cy = self._to_px(state.position, ego_pos)
         if not (0 <= cx < self._size and 0 <= cy < self._size):
             return
 
-        w_px = max(4, int(state.size[0] * self._scale))
-        l_px = max(4, int(state.size[1] * self._scale))
+        elevated = level in _ELEVATED
+        min_px = _ELEVATED_MIN_PX if elevated else 4
+        w_px = max(min_px, int(state.size[0] * self._scale))
+        l_px = max(min_px, int(state.size[1] * self._scale))
         box = cv2.boxPoints(((cx, cy), (l_px, w_px), -np.degrees(state.heading)))  # type: ignore[call-overload]
         cv2.drawContours(canvas, [box.astype(np.int32)], 0, color, -1)
         cv2.drawContours(canvas, [box.astype(np.int32)], 0, (255, 255, 255), 1)
+
+        # Highlight ring so a small risky agent is impossible to miss.
+        if elevated:
+            radius = int(max(w_px, l_px) * 0.75) + 6
+            cv2.circle(canvas, (cx, cy), radius, color, 2)
 
         if pred is not None:
             prev_pt = (cx, cy)
@@ -113,9 +138,10 @@ class BEVRenderer:
             color,
             2,
         )
+        n_elevated = sum(1 for r in scene_risk.agent_risks if r.risk_level in _ELEVATED)
         cv2.putText(
             canvas,
-            f"agents: {len(scene_risk.agent_risks)}",
+            f"agents: {len(scene_risk.agent_risks)}   high/crit: {n_elevated}",
             (10, 52),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,

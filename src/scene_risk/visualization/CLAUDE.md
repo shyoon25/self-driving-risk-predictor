@@ -57,7 +57,9 @@ Default: `canvas_size=800`, `range_m=50` → `scale = 8 px/m`. Ego is always at 
 | HUD (top-left) | Risk label + score, agent count |
 | Footer | `sample_token[:12]` |
 
-**Risk colors** (BGR): `LOW=(0,200,0)`, `MEDIUM=(0,165,255)`, `HIGH=(0,0,255)`, `CRITICAL=(0,0,180)`
+**Risk colors** (BGR, brighter = worse): `LOW=(0,200,0)`, `MEDIUM=(0,165,255)`, `HIGH=(0,90,255)`, `CRITICAL=(0,0,255)`
+
+**Elevated agents** (`HIGH`/`CRITICAL`): drawn last (on top), floored to `_ELEVATED_MIN_PX` box size, and wrapped in a highlight ring so small objects (pedestrians, cones) stay visible. HUD reports the `high/crit` count.
 
 ## Constraints
 

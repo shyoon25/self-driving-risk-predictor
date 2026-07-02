@@ -5,3 +5,4 @@ min_dist_critical: 1.0
 min_dist_high: 3.0
 min_dist_medium: 8.0
 collision_threshold_m: 2.0
+closing_margin_m: 0.5  # min separation must drop this far below its start to escalate risk

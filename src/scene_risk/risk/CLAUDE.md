@@ -43,6 +43,8 @@ class RiskAssessor:
 
 **`min_distance(ego, agent)`** — minimum pairwise Euclidean distance over the shared forecast horizon `T = min(len(ego.waypoints), len(agent.waypoints))`.
 
+**`is_closing(ego, agent, margin_m)`** — True when the minimum predicted separation is at least `margin_m` below the separation at the start of the horizon (an approach or crossing). False for a roughly constant gap.
+
 Both functions are **pure** — no class state, no side effects. Safe to call in isolation for unit tests.
 
 ## Risk Classification
@@ -60,6 +62,8 @@ Default thresholds (`configs/risk/default.yaml`):
 
 Scene score mapping: `LOW=0.0`, `MEDIUM=0.33`, `HIGH=0.67`, `CRITICAL=1.0`.
 Scene label = highest `RiskLevel` among all agents; empty scene → `LOW`, score `0.0`.
+
+**Closing-motion gate**: after `classify()`, the assessor demotes any non-LOW agent back to `LOW` unless `is_closing()` holds. This prevents proximity alone (via either channel) from flagging an object that merely sits at a constant distance — the common false alarm when ego is stopped. `closing_margin_m` (default 0.5 m) is the required drop in separation.
 
 ## Constraints
 
