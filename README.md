@@ -110,8 +110,6 @@ scene-risk/
 │   ├── conftest.py                  # synthetic fixtures (no nuScenes required)
 │   ├── unit/                        # run without dataset
 │   └── integration/                 # skipped without NUSCENES_DATAROOT
-│
-└── .github/workflows/ci.yml         # ruff + mypy + unit tests on push
 ```
 
 ---
@@ -244,4 +242,4 @@ NUSCENES_DATAROOT=/path pytest tests/integration   # integration tests
 - **Visualization:** OpenCV BEV renderer, ego-centered, y-axis flipped for image coords
 - **Config:** Hydra + OmegaConf composable YAML hierarchy
 - **Types:** Python 3.11 dataclasses, mypy strict annotations
-- **Tooling:** ruff, pytest, GitHub Actions CI
+- **Tooling:** ruff, mypy, pytest
