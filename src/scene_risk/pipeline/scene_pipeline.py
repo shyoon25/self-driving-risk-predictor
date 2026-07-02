@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import cv2  # type: ignore[import]
@@ -12,7 +11,7 @@ from scene_risk.data.loader import NuScenesLoader
 from scene_risk.data.schemas import AgentState, AgentTrajectory, Prediction
 from scene_risk.forecasting.base import Forecaster
 from scene_risk.forecasting.constant_velocity import ConstantVelocityForecaster
-from scene_risk.forecasting.evaluation import ade, fde
+from scene_risk.forecasting.evaluation import ade, aggregate_forecast_metrics, fde
 from scene_risk.risk.assessor import RiskAssessor
 from scene_risk.visualization.bev_renderer import BEVRenderer
 
@@ -53,8 +52,7 @@ class ScenePipeline:
         traj_by_id = {t.agent_id: t for t in trajectories}
         sample_tokens = self._loader.get_sample_tokens(scene_token)
 
-        ade_values: list[float] = []
-        fde_values: list[float] = []
+        per_agent: list[tuple[float, float, float]] = []  # (ade, fde, speed_mps)
 
         for idx, sample_token in enumerate(sample_tokens):
             sample = self._loader.nusc.get("sample", sample_token)
@@ -84,12 +82,8 @@ class ScenePipeline:
                 agent_preds.append(pred)
 
                 gt_future = _future_positions(traj, sample_ts, len(pred.waypoints))
-                a = ade(pred, gt_future)
-                f = fde(pred, gt_future)
-                if not math.isnan(a):
-                    ade_values.append(a)
-                if not math.isnan(f):
-                    fde_values.append(f)
+                speed = float(np.linalg.norm(state.velocity))
+                per_agent.append((ade(pred, gt_future), fde(pred, gt_future), speed))
 
             scene_risk = self._assessor.assess_scene(
                 ego_pred, agent_preds, scene_token, sample_token
@@ -102,9 +96,7 @@ class ScenePipeline:
         metrics = {
             "scene_token": scene_token,
             "n_samples": len(sample_tokens),
-            "n_agent_predictions": len(ade_values),
-            "mean_ade": float(np.mean(ade_values)) if ade_values else None,
-            "mean_fde": float(np.mean(fde_values)) if fde_values else None,
+            **aggregate_forecast_metrics(per_agent),
         }
         (output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
 
