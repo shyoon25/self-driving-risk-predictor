@@ -1,6 +1,6 @@
 # Self-Driving Scene Risk Predictor
 
-A clean, resume-quality autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the [nuScenes](https://www.nuscenes.org/) dataset.
+Autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the [nuScenes](https://www.nuscenes.org/) dataset.
 
 This is **not** an object detection project. nuScenes bounding-box annotations serve as detections; the focus is the reasoning stack above perception: trajectory extraction → forecasting → risk assessment → BEV visualization.
 
