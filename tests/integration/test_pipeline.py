@@ -29,3 +29,9 @@ def test_first_scene_produces_frames_and_metrics(tmp_path: Path) -> None:
     metrics = json.loads((tmp_path / "metrics.json").read_text())
     assert metrics["scene_token"] == scene_token
     assert metrics["n_samples"] >= 1
+
+    # Moving-agent breakdown is present and consistent with the all-agent aliases.
+    assert "mean_ade_moving" in metrics
+    assert "n_moving_agent_predictions" in metrics
+    assert metrics["mean_ade"] == metrics["mean_ade_all"]
+    assert metrics["mean_fde"] == metrics["mean_fde_all"]
