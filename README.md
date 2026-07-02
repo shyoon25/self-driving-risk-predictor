@@ -1,6 +1,6 @@
 # Self-Driving Scene Risk Predictor
 
-A production-quality autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the [nuScenes](https://www.nuscenes.org/) dataset.
+A clean, resume-quality autonomous driving safety stack that predicts future agent behavior and estimates scene-level driving risk on the [nuScenes](https://www.nuscenes.org/) dataset.
 
 This is **not** an object detection project. nuScenes bounding-box annotations serve as detections; the focus is the reasoning stack above perception: trajectory extraction → forecasting → risk assessment → BEV visualization.
 
@@ -8,15 +8,26 @@ This is **not** an object detection project. nuScenes bounding-box annotations s
 
 ## Demo
 
-<!-- Replace with actual output frame once pipeline runs end-to-end -->
-> _BEV output frames will appear here after running the pipeline._
+Bird's-eye view of nuScenes mini scene `cc8c0bf5…`, one frame per sample (2 Hz), rendered by the pipeline:
+
+<p align="center">
+  <img src="docs/demo.gif" alt="BEV risk demo" width="480">
+</p>
+
+A single frame — the ringed bright-red box is a CRITICAL agent flagged on its predicted path:
+
+<p align="center">
+  <img src="docs/demo_frame.png" alt="BEV frame with a CRITICAL agent" width="480">
+</p>
 
 Each frame shows:
-- **Ego vehicle** (white box) at canvas center
-- **Agent boxes** color-coded by risk level — green (LOW) → orange (MEDIUM) → red (HIGH) → dark red (CRITICAL)
+- **Ego vehicle** (white box) at canvas center, with **range rings** at 10–50 m
+- **Agent boxes** color-coded by risk — green (LOW) → orange (MEDIUM) → orange-red (HIGH) → **bright red (CRITICAL)**
+- **HIGH/CRITICAL agents** are enlarged and wrapped in a **highlight ring** so small objects (pedestrians, cones) stay visible, and are drawn on top
 - **Predicted trajectory fans** extending 3 s into the future
-- **Range rings** at 10, 20, 30, 40, 50 m
-- **Risk HUD** with scene-level score and agent count
+- **Risk HUD** with scene-level label, score, total agent count, and `high/crit` count
+
+Running the full scene also writes a `metrics.json` with forecasting accuracy (ADE/FDE) — see [Results](#results).
 
 ---
 
@@ -55,6 +66,8 @@ nuScenes Annotations
 | Forecasting | Constant velocity | Deterministic, interpretable, correct baseline |
 | Risk metrics | TTC + min-distance | Industry-standard; no ground truth needed to validate visually |
 | TTC method | Closest approach on predicted waypoints | Simple and accurate for straight-line forecasts |
+| Risk gating | Escalate only when closing | A constant-gap object (e.g. parked beside a stopped ego) stays LOW — avoids proximity-only false alarms |
+| Forecast eval | ADE / FDE vs observed future | Quantifies forecast accuracy against ground truth per scene |
 | Config system | [Hydra](https://hydra.cc/) | Composable YAML overrides; swap forecaster/risk params without code changes |
 | Package layout | `src/` | Prevents accidental relative imports; installable with `pip install -e .` |
 | Type checking | mypy (`disallow_untyped_defs`) | Catches schema mismatches across module boundaries at dev time |
@@ -79,11 +92,12 @@ scene-risk/
 │   │   └── extractor.py             # SceneExtractor — ann → AgentTrajectory
 │   ├── forecasting/
 │   │   ├── base.py                   # Forecaster ABC
-│   │   └── constant_velocity.py
+│   │   ├── constant_velocity.py
+│   │   └── evaluation.py             # ade(), fde() — forecast accuracy metrics
 │   ├── risk/
-│   │   ├── metrics.py                # ttc(), min_distance() — pure functions
+│   │   ├── metrics.py                # ttc(), min_distance(), is_closing() — pure functions
 │   │   ├── levels.py                 # RiskThresholds + classify()
-│   │   └── assessor.py              # RiskAssessor → SceneRisk
+│   │   └── assessor.py              # RiskAssessor → SceneRisk (with closing-motion gate)
 │   ├── visualization/
 │   │   └── bev_renderer.py          # BEVRenderer → (H, W, 3) BGR array
 │   └── pipeline/
@@ -96,8 +110,6 @@ scene-risk/
 │   ├── conftest.py                  # synthetic fixtures (no nuScenes required)
 │   ├── unit/                        # run without dataset
 │   └── integration/                 # skipped without NUSCENES_DATAROOT
-│
-└── .github/workflows/ci.yml         # ruff + mypy + unit tests on push
 ```
 
 ---
@@ -145,7 +157,7 @@ python scripts/run_pipeline.py \
   scene_token=<token>
 ```
 
-Output frames are written to `outputs/<scene_token[:12]>/frame_0000.png` … `frame_NNNN.png`.
+Output is written to `outputs/<scene_token[:12]>/`: one `frame_0000.png … frame_NNNN.png` per sample, plus a `metrics.json` summarizing forecasting accuracy for the scene.
 
 **Override any config value at the command line:**
 
@@ -181,6 +193,22 @@ print(loader.get_scene_tokens())
 
 Scene-level label = highest agent label. Scene score = score of that label.
 
+**Closing-motion gate:** after classification, an agent is demoted back to LOW unless it is actually *approaching* — its predicted minimum separation drops at least `risk.closing_margin_m` (default 0.5 m) below where it started. This keeps a stationary object that merely sits close to a stopped ego from triggering a proximity-only alarm.
+
+---
+
+## Results
+
+Forecasting accuracy on mini scene `cc8c0bf5…` (constant-velocity, 3 s horizon), written to `metrics.json`:
+
+| Agents | Count | Mean ADE | Mean FDE |
+|---|---|---|---|
+| Parked (≤ 0.5 m/s) | 3,513 | 0.04 m | — |
+| Moving (> 0.5 m/s) | 959 | 0.33 m | 0.70 m |
+| **All** | 4,472 | **0.10 m** | **0.20 m** |
+
+The scene is dominated by parked vehicles, where constant velocity is near-exact; the moving-agent numbers (sub-metre ADE, 0.7 m FDE over 3 s) are the meaningful measure of the baseline forecaster.
+
 ---
 
 ## Development
@@ -209,8 +237,9 @@ NUSCENES_DATAROOT=/path pytest tests/integration   # integration tests
 
 - **Dataset:** nuScenes v1.0-mini (10 scenes, 2 Hz annotation rate)
 - **Forecasting:** constant-velocity rollout, configurable horizon and timestep
-- **Risk metrics:** time-to-collision (TTC) + minimum pairwise distance
+- **Risk metrics:** time-to-collision (TTC) + minimum pairwise distance, gated by closing motion
+- **Forecast evaluation:** ADE / FDE against observed future positions, per scene
 - **Visualization:** OpenCV BEV renderer, ego-centered, y-axis flipped for image coords
 - **Config:** Hydra + OmegaConf composable YAML hierarchy
 - **Types:** Python 3.11 dataclasses, mypy strict annotations
-- **Tooling:** ruff, pytest, GitHub Actions CI
+- **Tooling:** ruff, mypy, pytest
