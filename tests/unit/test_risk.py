@@ -34,6 +34,10 @@ def test_ttc_no_collision() -> None:
     np.testing.assert_allclose(min_distance(ego, agent), 10.0)
 
 
+def test_ttc_pron_collision() -> None:
+    pass
+
+
 def test_already_overlapping() -> None:
     ego = _pred("ego", [[0, 0], [1, 0]])
     agent = _pred("a", [[0, 0], [1, 0]])
