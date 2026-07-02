@@ -4,7 +4,7 @@ import numpy as np
 
 from scene_risk.data.schemas import RiskLevel
 from scene_risk.risk.assessor import RiskAssessor
-from scene_risk.risk.metrics import min_distance, ttc
+from scene_risk.risk.metrics import is_closing, min_distance, ttc
 from tests.conftest import make_prediction
 
 _HORIZON = 2.0
@@ -51,19 +51,57 @@ def test_parallel_paths_constant_offset() -> None:
     assert ttc(ego, agent, threshold_m=2.0) == float("inf")
 
 
+def test_is_closing_approaching() -> None:
+    ego = _pred("ego", [[0, 0], [0, 0], [0, 0]])
+    agent = _pred("a", [[5, 0], [3, 0], [1, 0]])  # walking toward ego
+
+    assert is_closing(ego, agent) is True
+
+
+def test_is_closing_constant_gap() -> None:
+    ego = _pred("ego", [[0, 0], [0, 0], [0, 0]])
+    agent = _pred("a", [[1.5, 0], [1.5, 0], [1.5, 0]])  # parked alongside
+
+    assert is_closing(ego, agent) is False
+
+
 # --- assessor --------------------------------------------------------------
 
 
-def test_assess_scene_critical() -> None:
+def test_assess_scene_critical_head_on() -> None:
     assessor = RiskAssessor()
-    ego = _pred("ego", [[0, 0], [1, 0]])
-    agent = _pred("a", [[0, 0], [1, 0]])  # overlapping -> min_dist 0 -> CRITICAL
+    ego = _pred("ego", [[1, 0], [2, 0], [3, 0], [4, 0]])
+    agent = _pred("a", [[4, 0], [3, 0], [2, 0], [1, 0]])  # closing head-on -> CRITICAL
 
     result = assessor.assess_scene(ego, [agent], "scene", "sample")
 
     assert result.risk_label == RiskLevel.CRITICAL
     assert result.agent_risks[0].risk_level == RiskLevel.CRITICAL
     assert 0.0 <= result.scene_risk_score <= 1.0
+
+
+def test_parked_object_beside_stationary_ego_stays_low() -> None:
+    """Regression: a close but non-approaching agent must not raise the alarm."""
+    assessor = RiskAssessor()
+    ego = _pred("ego", [[0, 0], [0, 0], [0, 0]])  # stationary
+    agent = _pred("a", [[1.0, 0], [1.0, 0], [1.0, 0]])  # parked 1 m away, constant gap
+
+    result = assessor.assess_scene(ego, [agent], "scene", "sample")
+
+    # min_distance (1 m) would classify CRITICAL, but the gate demotes it.
+    np.testing.assert_allclose(result.agent_risks[0].min_distance, 1.0)
+    assert result.agent_risks[0].risk_level == RiskLevel.LOW
+    assert result.risk_label == RiskLevel.LOW
+
+
+def test_approaching_agent_escalates() -> None:
+    assessor = RiskAssessor()
+    ego = _pred("ego", [[0, 0], [0, 0], [0, 0]])  # stationary
+    agent = _pred("a", [[5, 0], [3, 0], [1, 0]])  # approaching to within 1 m
+
+    result = assessor.assess_scene(ego, [agent], "scene", "sample")
+
+    assert result.agent_risks[0].risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL)
 
 
 def test_assess_scene_low() -> None:
